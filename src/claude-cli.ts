@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
-import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
 import { delimiter, dirname, extname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline";
@@ -25,6 +25,12 @@ export const INSTALL_HINT =
   "Claude Code is not installed. Install it with `npm install -g @anthropic-ai/claude-code` " +
   "or set PI_CLAUDE_CODE_COMMAND to the executable.";
 export const LOGIN_HINT = "Claude Code is installed but not logged in. Run `claude auth login` and try again.";
+export const INHERIT_SETTINGS_AUTH_ENV = "PI_CLAUDE_CODE_INHERIT_SETTINGS_AUTH";
+export const SETTINGS_AUTH_HINT =
+  "Claude Code reports that this session is not logged in. pi-claude-code runs Claude Code with its settings " +
+  "disabled so user hooks and skills cannot change Pi turns, which also hides logins stored in Claude Code's " +
+  "settings.json (for example a `claude setup-token` value in env.ANTHROPIC_AUTH_TOKEN). " +
+  `Set ${INHERIT_SETTINGS_AUTH_ENV}=1 to pass that token through, or run \`claude auth login\`.`;
 
 export interface ClaudeStatus {
   available: boolean;
@@ -242,7 +248,13 @@ async function readyClaudeCommand(
   signal?: AbortSignal,
 ): Promise<string> {
   const env = claudeEnvironment(envInput);
-  const key = JSON.stringify([configuredCommand(env), env.PATH, env.HOME, env.CLAUDE_CONFIG_DIR]);
+  const key = JSON.stringify([
+    configuredCommand(env),
+    env.PATH,
+    env.HOME,
+    env.CLAUDE_CONFIG_DIR,
+    envFlagEnabled(env[INHERIT_SETTINGS_AUTH_ENV]),
+  ]);
   const cached = readyStatusCache.get(key);
   if (cached && cached.expires > Date.now()) return cached.command;
 
@@ -274,7 +286,7 @@ export async function discoverClaudeModels(
   timeoutMs = 20_000,
 ): Promise<DiscoveredClaudeModel[]> {
   signal?.throwIfAborted();
-  const env = processEnvironment(envInput, {});
+  const env = await processEnvironment(envInput, {});
   const command = await resolveClaudeExecutable(env);
   if (!command) throw new Error(INSTALL_HINT);
 
@@ -459,6 +471,52 @@ class AsyncQueue<T> {
   }
 }
 
+interface SettingsAuth {
+  key: (typeof INHERITED_AUTH_KEYS)[number];
+  token: string;
+  path: string;
+}
+
+const INHERITED_AUTH_KEYS = ["ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY"] as const;
+
+function effectiveConfigDirectory(env: Record<string, string | undefined>): string {
+  return env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
+}
+
+/** The auth token Claude Code itself would read from its own settings files. */
+async function settingsAuth(env: Record<string, string | undefined>): Promise<SettingsAuth | undefined> {
+  const configDirectory = effectiveConfigDirectory(env);
+  for (const name of ["settings.json", "settings.local.json"]) {
+    const path = join(configDirectory, name);
+    try {
+      const settings = JSON.parse(await readFile(path, "utf8")) as { env?: Record<string, unknown> };
+      for (const key of INHERITED_AUTH_KEYS) {
+        const value = settings.env?.[key];
+        if (typeof value === "string" && value.trim()) return { key, token: value.trim(), path };
+      }
+    } catch {
+      // A missing or malformed settings file is simply not an auth source.
+    }
+  }
+  return undefined;
+}
+
+const NOT_LOGGED_IN = /not logged in|please run \/login/iu;
+
+/** Turn Claude Code's synthetic error assistants into actionable messages. */
+async function describeNativeError(
+  text: string,
+  env: Record<string, string | undefined> | undefined,
+  stderr: string,
+): Promise<string> {
+  if (NOT_LOGGED_IN.test(text)) {
+    const auth = await settingsAuth(claudeEnvironment({ ...process.env, ...env }));
+    return `${SETTINGS_AUTH_HINT}${auth ? ` Token found in ${auth.path}.` : ""} Claude Code said: ${text}`;
+  }
+  const suffix = stderr.trim() ? ` (${stderr.trim().slice(-500)})` : "";
+  return `Claude Code API error: ${text}${suffix}`;
+}
+
 function conflictingEnvironment(env: Record<string, string>): string[] {
   const conflicts = ["ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "ANTHROPIC_FOUNDRY_API_KEY"].filter(
     (key) => !!env[key],
@@ -469,16 +527,22 @@ function conflictingEnvironment(env: Record<string, string>): string[] {
   return conflicts;
 }
 
-function processEnvironment(
+async function processEnvironment(
   input: Record<string, string | undefined> | undefined,
   extraBody: Record<string, unknown>,
-): Record<string, string> {
+): Promise<Record<string, string>> {
   const env = claudeEnvironment({ ...process.env, ...input });
   const conflicts = conflictingEnvironment(env);
   if (conflicts.length) {
     throw new Error(`Claude Code subscription provider refuses conflicting auth/backend overrides: ${conflicts.join(", ")}`);
   }
   delete env.CLAUDE_CODE_EXTRA_BODY;
+  if (envFlagEnabled(env[INHERIT_SETTINGS_AUTH_ENV]) && !INHERITED_AUTH_KEYS.some((key) => !!env[key])) {
+    // Inheriting is opt-in: a token in Claude Code's settings must not silently
+    // replace the auth the user expects Pi to use.
+    const inherited = await settingsAuth(env);
+    if (inherited) env[inherited.key] = inherited.token;
+  }
   Object.assign(env, {
     ENABLE_TOOL_SEARCH: "false",
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
@@ -815,9 +879,9 @@ function frameHistoryHash(frames: NativeFrame[]): string {
   );
 }
 
-function launchPlan(input: RunClaudeInput): ClaudeLaunchPlan {
+async function launchPlan(input: RunClaudeInput): Promise<ClaudeLaunchPlan> {
   const timeoutMs = input.timeoutMs ?? 180_000;
-  const env = processEnvironment(input.env, input.extraBody);
+  const env = await processEnvironment(input.env, input.extraBody);
   return {
     env,
     timeoutMs,
@@ -1091,7 +1155,7 @@ class ClaudeProcess {
           throw new IncompleteClaudeResponse(`Incomplete Claude Code upstream response (${detail})`, {
             status: this.relay.status,
             upstreamError,
-            rewriteFailed: this.relay.rewriteFailed,
+            retryable: !this.relay.rewriteFailed,
           });
         }
         message = this.relay.capture.message;
@@ -1101,10 +1165,14 @@ class ClaudeProcess {
       }
 
       if (!message || !sawMessageStop || !result) {
+        if (nativeError) {
+          throw new IncompleteClaudeResponse(await describeNativeError(nativeError, input.env, this.stderr), {
+            retryable: false,
+          });
+        }
         // Keep what the child actually said: a native API error text or an event trace is the only clue
         // when the response is incomplete (the bare message hid both in the 2026-10-26 loops).
         const clues = [
-          nativeError ? `native error: ${nativeError.slice(0, 300)}` : "",
           this.stderr ? this.stderr.trim().slice(-500) : "",
           trace.length ? `events: ${trace.join(",")}` : "",
           `relay ${this.relay.used ? `used, status ${this.relay.status ?? "unknown"}` : "unused"}`,
@@ -1187,24 +1255,24 @@ export class IncompleteClaudeResponse extends Error {
   readonly status?: number;
   /** Upstream error text (HTTP error body or in-stream error event). */
   readonly upstreamError?: string;
-  /** Pi's own request rewrite failed: the same request repeats the same fault. */
-  readonly rewriteFailed: boolean;
+  /** False for a fault a retry cannot fix: Pi's own request rewrite, or an auth failure. */
+  readonly retryable: boolean;
 
   constructor(
     message: string,
-    details: { status?: number; upstreamError?: string; rewriteFailed?: boolean } = {},
+    details: { status?: number; upstreamError?: string; retryable?: boolean } = {},
   ) {
     super(message);
     this.name = "IncompleteClaudeResponse";
     this.status = details.status;
     this.upstreamError = details.upstreamError;
-    this.rewriteFailed = details.rewriteFailed === true;
+    this.retryable = details.retryable !== false;
   }
 }
 
 /** Attempts allowed per failure class: 429 gets one retry; overloaded, 5xx and stream cuts get two; other 4xx none. */
 function maxAttemptsFor(error: IncompleteClaudeResponse): number {
-  if (error.rewriteFailed) return 1;
+  if (!error.retryable) return 1;
   const status = error.status;
   if (status === 429 || /rate_limit_error/u.test(error.upstreamError ?? "")) return 2;
   if (status !== undefined && status >= 400 && status < 500 && status !== 408) return 1;
@@ -1440,7 +1508,7 @@ export async function runClaudeRequest(input: RunClaudeInput): Promise<RunClaude
 
 async function runClaudeRequestOnce(input: RunClaudeInput): Promise<RunClaudeOutput> {
   input.signal?.throwIfAborted();
-  const plan = launchPlan(input);
+  const plan = await launchPlan(input);
   const acquired = await acquireProcess(input, plan);
   try {
     const output = await acquired.worker.run(input, acquired.continuation);
