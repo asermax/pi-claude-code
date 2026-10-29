@@ -125,8 +125,9 @@ overrides for Claude Code.
 - Branching, editing earlier messages, or changing settings mid-conversation
   starts a fresh Claude Code process that replays the conversation. The first
   response after that can be slower and may use more quota.
-- Complex tool schemas (nullable types, `oneOf`, `allOf`, `anyOf`) may be
-  simplified before Claude sees them.
+- Top-level composition in a tool schema (`oneOf`, `allOf`, `anyOf`) is
+  removed before Claude sees it; nested schemas, nullable ones included, pass
+  unchanged.
 - On Windows, Windows PowerShell 5.1 mangles quoted arguments (such as the
   inline MCP configuration JSON) when a `.ps1` launcher forwards them to a
   native program. Install PowerShell 7 or use the `claude.cmd` launcher in that
