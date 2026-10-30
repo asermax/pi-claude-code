@@ -4,6 +4,11 @@ import { randomBytes } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import type { AnthropicStreamEvent, NativeContentBlock, NativeMessage } from "./native-types.ts";
 
+/** A fault in Pi's own request rewrite. Its message is fixed text, and a retry repeats it. */
+export class RelayRequestError extends Error {
+  override name = "RelayRequestError";
+}
+
 function copy<T>(value: T): T {
   return structuredClone(value);
 }
@@ -97,6 +102,7 @@ export class AnthropicCapture {
 
 /** Name, code(s) and message of a relay failure: the name alone ("Error") hid the cause. */
 export function describeFailure(error: unknown): string {
+  if (error instanceof RelayRequestError) return `${error.name}: ${error.message}`;
   if (!(error instanceof Error)) return `UnknownError${error === undefined ? "" : `: ${String(error).slice(0, 200)}`}`;
   const inner = error instanceof AggregateError ? (error.errors as unknown[]) : [];
   const codeOf = (value: unknown) => {
@@ -139,6 +145,8 @@ export class TurnRelay {
   status?: number;
   requestId?: string;
   failure?: string;
+  /** The failure came from Pi's request rewrite, not the network. */
+  rewriteFailed = false;
   errorBody = Buffer.alloc(0);
   originalRequestBody?: Buffer;
   requestBody?: Buffer;
@@ -195,6 +203,7 @@ export class TurnRelay {
     this.status = undefined;
     this.requestId = undefined;
     this.failure = undefined;
+    this.rewriteFailed = false;
     this.errorBody = Buffer.alloc(0);
     this.originalRequestBody = undefined;
     this.requestBody = undefined;
@@ -345,6 +354,7 @@ export class TurnRelay {
       response.end();
     } catch (error) {
       this.failure = describeFailure(error);
+      this.rewriteFailed = error instanceof RelayRequestError;
       if (!response.headersSent) response.writeHead(this.cancelled ? 499 : 502).end();
       else response.destroy();
     } finally {

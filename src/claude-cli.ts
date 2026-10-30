@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline";
 import { spawn, type ChildProcess } from "node:child_process";
 import { registerSessionResourceCleanup } from "@earendil-works/pi-ai";
-import { TurnRelay } from "./turn-relay.ts";
+import { RelayRequestError, TurnRelay } from "./turn-relay.ts";
 import { usageCreditsAllowed, usageCreditsChargeError, type RateLimitInfo } from "./billing.ts";
 import { envFlagEnabled } from "./env.ts";
 import type { DiscoveredClaudeModel } from "./model-catalog.ts";
@@ -668,7 +668,7 @@ function injectNativeSystemMessages(
     }
     output.push(message);
   }
-  if (byAssistant.size > 0) throw new Error("Claude Code request lost an assistant boundary needed by system history");
+  if (byAssistant.size > 0) throw new RelayRequestError("Claude Code request lost an assistant boundary needed by system history");
   output.push(...trailing);
   return output;
 }
@@ -726,8 +726,9 @@ export function rewriteInitialRequest(
   };
   let messages = payload.messages;
   const first = messages?.[0];
-  if (first?.role !== "user" || !Array.isArray(first.content)) {
-    throw new Error("Claude Code request is missing its initial user message");
+  if (first?.role !== "user" || (typeof first.content !== "string" && !Array.isArray(first.content))) {
+    throw new RelayRequestError("Claude Code request is missing its initial user message");
+  }
   }
   if (prefix) first.content = [...structuredClone(prefix), ...structuredClone(canonicalContent)];
 
@@ -1067,6 +1068,7 @@ class ClaudeProcess {
           throw new IncompleteClaudeResponse(`Incomplete Claude Code upstream response (${detail})`, {
             status: this.relay.status,
             upstreamError,
+            rewriteFailed: this.relay.rewriteFailed,
           });
         }
         message = this.relay.capture.message;
@@ -1162,17 +1164,24 @@ export class IncompleteClaudeResponse extends Error {
   readonly status?: number;
   /** Upstream error text (HTTP error body or in-stream error event). */
   readonly upstreamError?: string;
+  /** Pi's own request rewrite failed: the same request repeats the same fault. */
+  readonly rewriteFailed: boolean;
 
-  constructor(message: string, details: { status?: number; upstreamError?: string } = {}) {
+  constructor(
+    message: string,
+    details: { status?: number; upstreamError?: string; rewriteFailed?: boolean } = {},
+  ) {
     super(message);
     this.name = "IncompleteClaudeResponse";
     this.status = details.status;
     this.upstreamError = details.upstreamError;
+    this.rewriteFailed = details.rewriteFailed === true;
   }
 }
 
 /** Attempts allowed per failure class: 429 gets one retry; overloaded, 5xx and stream cuts get two; other 4xx none. */
 function maxAttemptsFor(error: IncompleteClaudeResponse): number {
+  if (error.rewriteFailed) return 1;
   const status = error.status;
   if (status === 429 || /rate_limit_error/u.test(error.upstreamError ?? "")) return 2;
   if (status !== undefined && status >= 400 && status < 500 && status !== 408) return 1;
