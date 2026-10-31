@@ -1,5 +1,31 @@
 # pi-claude-code
 
+This is a fork of [earendil-works/pi-claude-code](https://github.com/earendil-works/pi-claude-code),
+which has not merged a fix since 2026-10-12. It carries the fixes that live in
+other forks and unmerged pull requests, plus one for the warm-process failure in
+issue #16:
+
+| Problem | Fix source |
+| --- | --- |
+| Fable 5.1 returns 400 "A maximum of 4 blocks with cache_control" after a tool result | #10, #11 (jdbrew88) |
+| Lost upstream stream or 5xx ends the turn instead of being retried | #8, #4 (series-phil), #9 (B0und) |
+| Warm continuation fails in milliseconds with "assistant, message_stop and one result required" | #16, this fork |
+| Switching from Codex or GPT to Claude fails 400 on tool-call IDs containing `\|` | #3, #6 (adstastic), #7 |
+| Thinking signatures issued by another provider are replayed and rejected | Stratinator |
+| `thinking.type: disabled` rejected by Opus 5.5 and Sonnet 5.5 | #2, #13 (panchogn) |
+| Thinking text never shown, because adaptive thinking asked for no display | #17 (hanselime) |
+| A tool name Claude invents fails the whole turn | #14 (series-phil, getpaperplane) |
+| Auth inside `~/.claude/settings.json` is ignored | #15 (arhen) |
+| A `ttl=1h` breakpoint placed after Claude Code's 5m one returns 400 | #15 (arhen) |
+| An inherited `ANTHROPIC_API_KEY` blocks the subscription provider | #5 (adstastic) |
+| Nested `null` schema variants dropped, so the model sends the string `"null"` | Stratinator |
+| Claude Code runs in the wrong directory when the host names one in metadata | Stratinator |
+| Request-rewrite failures show as a lost connection and are retried | ioanlucut |
+| A first user message sent as a string aborts the turn | ioanlucut |
+
+The test script uses `tsx`, because Node 26 removed
+`--experimental-transform-types`.
+
 This Pi extension lets you use your Claude Pro or Max subscription in Pi by
 routing all Claude model requests through the official Claude Code CLI.
 
