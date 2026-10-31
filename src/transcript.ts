@@ -13,7 +13,7 @@ import {
   type Tool,
   type ToolResultMessage,
 } from "@earendil-works/pi-ai";
-import { supportsAdaptiveThinking, supportsThinkingOff } from "./model-catalog.ts";
+import { PROVIDER_ID, supportsAdaptiveThinking, supportsThinkingOff } from "./model-catalog.ts";
 import type { NativeContentBlock, NativeFrame, NativeMessage } from "./native-types.ts";
 
 export const TOOL_PREFIX = "mcp__pi__";
@@ -185,7 +185,13 @@ function canonicalAssistantContent(message: AssistantMessage): NativeContentBloc
   for (const block of message.content) {
     if (block.type === "text" && block.text.trim()) {
       blocks.push({ type: "text", text: sanitizeSurrogates(block.text) });
-    } else if (block.type === "thinking" && block.thinking.trim() && block.thinkingSignature) {
+    } else if (
+      block.type === "thinking" &&
+      block.thinking.trim() &&
+      block.thinkingSignature &&
+      message.provider === PROVIDER_ID
+    ) {
+      // Thinking signatures only validate for Claude; another provider's (OpenAI's encrypted reasoning) is rejected.
       if (block.redacted) {
         blocks.push({ type: "redacted_thinking", data: block.thinkingSignature });
       } else {

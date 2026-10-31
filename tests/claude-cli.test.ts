@@ -174,7 +174,7 @@ test("keeps one breakpoint in a pre-marked multi-block final message (issue #10)
     rewriteInitialRequest(
       Buffer.from(JSON.stringify(body)),
       undefined,
-      body.messages[0]!.content,
+      body.messages[0]!.content as unknown[],
       [{ role: "system", content: [{ type: "text", text: "environment", cache_control: marker }] }],
       [],
     ).toString("utf8"),
@@ -506,8 +506,8 @@ test("caps cache_control markers at four, keeping prefix and the final message b
   };
   capCacheBreakpoints(payload);
   assert.equal(JSON.stringify(payload).split("cache_control").length - 1, 4);
-  assert.equal(payload.messages[0]!.content[0]!.cache_control, undefined);
-  assert.deepEqual(payload.messages[2]!.content[0]!.cache_control, mark);
+  assert.equal((payload.messages[0]!.content[0] as { cache_control?: unknown }).cache_control, undefined);
+  assert.deepEqual((payload.messages[2]!.content[0] as { cache_control?: unknown }).cache_control, mark);
   assert.deepEqual(payload.tools[1]!.cache_control, mark);
 });
 

@@ -119,6 +119,29 @@ test("normalizes foreign tool IDs consistently without changing transcript histo
   assert.deepEqual(messages, original);
 });
 
+test("drops thinking signatures that another provider issued", () => {
+  const foreign: AssistantMessage = {
+    role: "assistant",
+    api: "openai-responses",
+    provider: "openai",
+    model: "gpt-6.1-sol",
+    content: [
+      { type: "thinking", thinking: "plan the call", thinkingSignature: '{"encrypted_content":"opaque"}' },
+      { type: "text", text: "listing" },
+    ],
+    usage,
+    stopReason: "stop",
+    timestamp: 1,
+  };
+  const frames = prepareFrames([
+    { role: "user", content: "list runs", timestamp: 0 },
+    foreign,
+    { role: "user", content: "continue", timestamp: 2 },
+  ]);
+
+  assert.deepEqual(frames[1]?.message.content, [{ type: "text", text: "listing" }]);
+});
+
 test("replays native signed blocks only while the visible projection is unchanged", () => {
   const assistant: AssistantMessage = {
     role: "assistant",
