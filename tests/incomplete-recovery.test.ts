@@ -279,6 +279,24 @@ test("relay failure (unreachable upstream, AggregateError) is torn down and retr
   } finally { await closeClaudeProcesses(); await rm(t.root, { recursive: true, force: true }); }
 });
 
+test("a request rewrite failure reports its reason and is not retried", async () => {
+  const t = await setup("relay");
+  const upstream = await fakeUpstream(200, { type: "message", content: [] });
+  try {
+    await assert.rejects(
+      runClaudeRequest({ ...t.input(), upstreamUrl: upstream.url, nativeSystemInjections: [] } as never),
+      (e: Error) => {
+        assert.match(e.message, /relay failure RelayRequestError: Claude Code request is missing its initial user message/);
+        assert.doesNotMatch(e.message, /gave up after/);
+        return true;
+      },
+    );
+    assert.equal(upstream.hits(), 0, "the rewrite failed before any upstream request");
+    assert.equal(await t.spawns(), 1, "a rewrite fault repeats, so it is not retried");
+    assert.equal(cachedClaudeProcessCount(), 0);
+  } finally { await upstream.close(); await closeClaudeProcesses(); await rm(t.root, { recursive: true, force: true }); }
+});
+
 for (const failingSession of [undefined, "healthy"] as const) {
   test(`a concurrent healthy request survives another request's incomplete-response recovery (failing sessionId ${failingSession ?? "undefined"})`, async () => {
     const t = await setup("hold-good");

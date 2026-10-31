@@ -729,7 +729,6 @@ export function rewriteInitialRequest(
   if (first?.role !== "user" || (typeof first.content !== "string" && !Array.isArray(first.content))) {
     throw new RelayRequestError("Claude Code request is missing its initial user message");
   }
-  }
   if (prefix) first.content = [...structuredClone(prefix), ...structuredClone(canonicalContent)];
 
   if (initialSystemMessages?.length && messages) {

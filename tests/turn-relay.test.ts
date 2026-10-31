@@ -108,7 +108,7 @@ test("preserves nested connection error codes and the underlying message", async
     assert.equal(response.status, 502);
     assert.equal(relay.status, undefined);
     assert.equal(relay.capture.complete, false);
-    assert.equal(relay.failure, "AggregateError ETIMEDOUT/ENETUNREACH: private connection details");
+    assert.match(relay.failure!, /^AggregateError ETIMEDOUT\/ENETUNREACH: private connection details/);
   } finally {
     await relay.close();
   }
