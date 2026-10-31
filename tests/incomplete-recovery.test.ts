@@ -72,6 +72,8 @@ for await (const line of input) {
     {type: "message_stop"}]) console.log(JSON.stringify({type: "stream_event", event}));
   console.log(JSON.stringify({type: "assistant", message: {id: "m", role: "assistant", content: [{type: "text", text: "ok"}], stop_reason: "end_turn", usage}}));
   console.log(JSON.stringify({type: "result", subtype: "success", is_error: false, usage}));
+  // Simulates the stale event a warm process can leave queued: never read by this turn.
+  if (process.env.MODE === "stale-result" && spawns === 1) console.log(JSON.stringify({type: "result", subtype: "success", is_error: false, usage}));
 }
 `;
 
@@ -98,6 +100,24 @@ test("an incomplete response tears down the child and the next attempt respawns 
     assert.equal(cachedClaudeProcessCount(), 1, "only the healthy worker stays cached");
     const again = await runClaudeRequest({ ...t.input(), frames: [...t.input().frames] });
     assert.ok(again.message);
+  } finally { await closeClaudeProcesses(); await rm(t.root, { recursive: true, force: true }); }
+});
+
+test("a warm continuation ignores a result the previous turn left queued", async () => {
+  const t = await setup("stale-result");
+  const first = [{ type: "user" as const, message: { role: "user" as const, content: [{ type: "text", text: "hi" }] } }];
+  try {
+    const turn1 = await runClaudeRequest({ ...t.input(), frames: first });
+    const turn2 = await runClaudeRequest({
+      ...t.input(),
+      frames: [
+        ...first,
+        { type: "assistant", message: { role: "assistant", content: turn1.message.content } },
+        { type: "user", message: { role: "user", content: [{ type: "text", text: "again" }] } },
+      ],
+    });
+    assert.equal(turn2.message.content[0]?.type, "text");
+    assert.equal(await t.spawns(), 1, "the warm worker served both turns; no cold respawn was needed");
   } finally { await closeClaudeProcesses(); await rm(t.root, { recursive: true, force: true }); }
 });
 

@@ -439,6 +439,11 @@ class AsyncQueue<T> {
     for (const waiter of this.waiters.splice(0)) waiter({ value: undefined, done: true });
   }
 
+  /** Drop events a finished turn left behind: a continuation must start from an empty queue. */
+  drain(): void {
+    this.values.length = 0;
+  }
+
   async next(signal: AbortSignal | undefined, timeoutMs: number): Promise<T | undefined> {
     if (this.values.length) return this.values.shift();
     if (this.ended) {
@@ -1064,6 +1069,9 @@ class ClaudeProcess {
   async run(input: RunClaudeInput, continuation: boolean): Promise<RunClaudeOutput> {
     if (!this.isAlive()) throw new Error("Claude Code process is no longer available");
     input.signal?.throwIfAborted();
+    // A warm process can still hold a result the previous turn did not read; taken as this turn's own, it fails the
+    // turn in milliseconds with "assistant, message_stop and one result required" (issue #16).
+    if (continuation) this.queue.drain();
 
     let sawMessageStop = false;
     // A throw from the consumer (e.g. the stream translator) is Pi's own failure, not an upstream cut: keep it so it
