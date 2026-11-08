@@ -1016,6 +1016,27 @@ function enforceCacheTtlOrder(payload: { tools?: unknown; system?: unknown; mess
   for (const message of payload.messages ?? []) visit(message.content);
 }
 
+/**
+ * Drop later system messages that only repeat the leading ones. Claude Code
+ * appends a date reminder after the newest message when it replays a history,
+ * but a warm process does not have it at that position. Kept anywhere past the
+ * leading block, the copy changes the request prefix between turns and the
+ * prompt cache misses. The leading environment message already carries it.
+ */
+function withoutRepeatedSystemMessages(messages: NativeRequestMessage[]): NativeRequestMessage[] {
+  let leadingEnd = 1;
+  while (messages[leadingEnd]?.role === "system") leadingEnd += 1;
+  const leadingText = messages
+    .slice(1, leadingEnd)
+    .map((message) => contentText(message.content))
+    .join("\n");
+  return messages.filter((message, index) => {
+    if (index < leadingEnd || message.role !== "system") return true;
+    const text = contentText(message.content);
+    return !text || !leadingText.includes(text);
+  });
+}
+
 export function rewriteInitialRequest(
   body: Buffer,
   frames: NativeFrame[],
@@ -1047,15 +1068,10 @@ export function rewriteInitialRequest(
     );
     if (snapshot[0]) Object.assign(snapshot[0], settings);
     messages.splice(1, systemEnd - 1, ...snapshot);
-
-    const initialText = initialSystemMessages
-      .map((message) => contentText((message as NativeRequestMessage).content))
-      .join("\n");
-    while (messages.at(-1)?.role === "system") {
-      const trailingText = contentText(messages.at(-1)?.content);
-      if (!trailingText || !initialText.includes(trailingText)) break;
-      messages.pop();
-    }
+  }
+  if (messages) {
+    messages = withoutRepeatedSystemMessages(messages);
+    payload.messages = messages;
   }
 
   if (nativeSystemInjections) {
