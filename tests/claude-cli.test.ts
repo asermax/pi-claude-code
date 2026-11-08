@@ -457,7 +457,7 @@ for await (const line of input) {
         response: {
           models: [
             {value: "default", resolvedModel: "claude-opus-5-5[1m]", displayName: "Default", description: "Opus with 1M context"},
-            {value: "sonnet", resolvedModel: "claude-sonnet-5", displayName: "Sonnet", description: "Efficient", supportsAdaptiveThinking: true}
+            {value: "sonnet", resolvedModel: "claude-sonnet-5-5", displayName: "Sonnet", description: "Efficient", supportsAdaptiveThinking: true}
           ]
         }
       }
@@ -578,7 +578,7 @@ for await (const line of input) {
 
     // The model runs in the directory the host names in metadata, not the host process's.
     const streamed = await streamClaudeCode(
-      CLAUDE_CODE_MODELS.find((model) => model.id === "claude-sonnet-5")!,
+      CLAUDE_CODE_MODELS.find((model) => model.id === "claude-sonnet-5-5")!,
       { messages: [{ role: "user", content: "hi", timestamp: 0 }] } as unknown as TranscriptContext,
       { metadata: { cwd: workingRoot }, timeoutMs: 5_000, cacheRetention: "none",
         env: { PI_CLAUDE_CODE_COMMAND: executable, EXPECTED_CWD: workingRoot, EXPECTED_SYSTEM_PROMPT: "" } },
