@@ -1,5 +1,24 @@
 # pi-claude-code
 
+This is a fork of [earendil-works/pi-claude-code](https://github.com/earendil-works/pi-claude-code)
+that adds these fixes on top of upstream `main`:
+
+| Problem | Fix source |
+| --- | --- |
+| More than four `cache_control` blocks return 400 after a tool result | jdbrew88 |
+| A Pi system-prompt update after the latest query adds a fifth cache breakpoint | ioanlucut |
+| A `ttl=1h` breakpoint placed after Claude Code's 5m one returns 400 | arhen |
+| Nested `null` schema variants dropped, so the model sends the string `"null"` | Stratinator |
+| Claude Code runs in the wrong directory when the host names one in metadata | Stratinator |
+| Auth inside `~/.claude/settings.json` is ignored | arhen |
+| A first user message sent as a string aborts the turn | ioanlucut |
+| Claude Code's system reminders reach the model in its system messages | hanselime |
+| Pi retries terminal failures (plan limits, 4xx, usage credits) or skips transient ones | B0und |
+
+The offline model catalog lists Opus 5.5, Fable 5.1, Sonnet 5.5 and Haiku 5.5.
+The test script uses `tsx`, because Node 26 removed
+`--experimental-transform-types`.
+
 This Pi extension lets you use your Claude Pro or Max subscription in Pi by
 routing all Claude model requests through the official Claude Code CLI.
 
