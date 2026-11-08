@@ -861,3 +861,9 @@ test("rewriteInitialRequest never emits five markers (tools + 2 system + system 
   const parsed = JSON.parse(out.toString("utf8"));
   assert.deepEqual(parsed.messages.at(-1).content.at(-1).cache_control, mark);
 });
+
+test("accepts a first user message sent as a string", () => {
+  const wire = [{ role: "user", content: "inspect" }];
+  const rewritten = rewrite(wire, [{ type: "user", message: { role: "user", content: [text("inspect")] } }]);
+  assert.deepEqual(withoutMarkers(rewritten[0]!.content), [text("inspect")]);
+});
