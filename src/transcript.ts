@@ -253,7 +253,17 @@ function canonicalAssistantContent(message: AssistantMessage): NativeContentBloc
   return blocks;
 }
 
+/**
+ * Claude Code drops an assistant message holding only thinking (a response cut
+ * off before any text or tool call), merging the user messages around it. Replay
+ * such a turn as absent so Pi's frames match the request Claude Code builds.
+ */
 function assistantContent(message: AssistantMessage): NativeContentBlock[] {
+  const blocks = replayedAssistantContent(message);
+  return blocks.some((block) => block.type !== "thinking" && block.type !== "redacted_thinking") ? blocks : [];
+}
+
+function replayedAssistantContent(message: AssistantMessage): NativeContentBlock[] {
   const carrier = replayCarrier(message);
   if (carrier && projectionsEqual(assistantProjection(message), carrier.projection)) {
     return clone(carrier.message.content);
