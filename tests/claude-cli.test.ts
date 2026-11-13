@@ -19,6 +19,7 @@ import { CLAUDE_CODE_MODELS } from "../src/model-catalog.ts";
 import type { NativeFrame } from "../src/native-types.ts";
 import { createClaudeCodeProvider } from "../src/provider.ts";
 import { streamClaudeCode } from "../src/stream.ts";
+import { prepareFrames } from "../src/transcript.ts";
 
 type Block = Record<string, unknown>;
 type WireMessage = { role: string; content: unknown };
@@ -278,6 +279,16 @@ test("a replay rebuilds the system messages exactly as the first request sent th
   const replay = rewrite([later[0]!, system, later[1]!, later[2]!], framesFor(later), [structuredClone(system)]);
   assert.deepEqual(withoutMarkers(replay[1]), withoutMarkers(first[1]));
   assert.doesNotMatch(JSON.stringify(replay), /system-reminder/);
+});
+
+test("accepts a request from which Claude Code dropped blank user text", () => {
+  // An extension notification, then the empty user message that woke the agent.
+  const frames = prepareFrames([
+    { role: "user", content: [{ type: "text", text: "process exited" }], timestamp: 1 },
+    { role: "user", content: [{ type: "text", text: "" }], timestamp: 1 },
+  ]);
+  const wire = [{ role: "user", content: [text("process exited")] }];
+  assert.deepEqual(rewrite(wire, frames), wire);
 });
 
 test("injects native system history at assistant boundaries", () => {
