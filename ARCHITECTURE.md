@@ -110,6 +110,13 @@ so top-level `oneOf`, `allOf`, and `anyOf` are removed. Nested schemas pass
 unchanged; Anthropic accepts nullable properties, and removing their null
 variant made the model send the string "null" instead of null.
 
+Claude Code declares each Pi tool as `mcp__pi__<name>`. A tool whose name is
+not 1 to 50 ASCII letters, digits, `_` or `-`, or repeats an earlier name, is
+left out of the request instead of failing it, and the response carries a
+`claude-code.skipped-tools` diagnostic. The tool stays registered in Pi; Claude
+only cannot see it. Long MCP tool names (`mcp__<server>__<tool>`) are the usual
+cause.
+
 Exact mid-conversation tool additions and removals, including prompt-cache
 preservation, work only on supported models. Other cases fall back to the
 current tool state and may lose prompt-cache reuse.
