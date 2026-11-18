@@ -966,13 +966,11 @@ function normalizeLeadingSystemCache(system: unknown): void {
 
 const MAX_CACHE_BREAKPOINTS = 4;
 
-function collectCacheMarkers(value: unknown, out: Record<string, unknown>[]): void {
-  if (Array.isArray(value)) {
-    for (const child of value) collectCacheMarkers(child, out);
-  } else if (value && typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    if (record.cache_control !== undefined) out.push(record);
-    for (const [key, child] of Object.entries(record)) if (key !== "cache_control") collectCacheMarkers(child, out);
+function collectCacheMarkers(blocks: unknown, out: Record<string, unknown>[]): void {
+  if (!Array.isArray(blocks)) return;
+  // Only direct API block markers count; schemas, tool inputs and nested content are user data.
+  for (const block of blocks) {
+    if (block && typeof block === "object" && block.cache_control !== undefined) out.push(block);
   }
 }
 
@@ -986,7 +984,11 @@ export function capCacheBreakpoints(payload: { messages?: unknown; system?: unkn
   collectCacheMarkers(payload.tools, fixed);
   collectCacheMarkers(payload.system, fixed);
   const inMessages: Record<string, unknown>[] = [];
-  collectCacheMarkers(payload.messages, inMessages);
+  if (Array.isArray(payload.messages)) {
+    for (const message of payload.messages) {
+      if (message && typeof message === "object") collectCacheMarkers(message.content, inMessages);
+    }
+  }
   let excess = fixed.length + inMessages.length - MAX_CACHE_BREAKPOINTS;
   for (let i = 0; excess > 0 && i < inMessages.length - 1; i++, excess--) delete inMessages[i]!.cache_control;
   // Prefix markers only go if even tools+system alone exceed the limit; drop the latest first.

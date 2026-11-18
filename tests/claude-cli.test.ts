@@ -1052,6 +1052,28 @@ test("caps cache_control markers at four, keeping prefix and the final message b
   assert.deepEqual(payload.tools[1]!.cache_control, mark);
 });
 
+test("cache marker cap preserves schema properties, tool inputs and nested tool content", () => {
+  const mark = { type: "ephemeral", ttl: "1h" };
+  const schema = { type: "object", properties: { cache_control: { type: "string" } } };
+  const input = { cache_control: "user value", nested: { cache_control: "nested value" } };
+  const content = [{ type: "text", text: "result", cache_control: "tool data" }];
+  const payload = {
+    tools: [{ name: "a", input_schema: schema, cache_control: mark }],
+    system: [{ type: "text", text: "s1", cache_control: mark }, { type: "text", text: "s2", cache_control: mark }],
+    messages: [
+      { role: "assistant", content: [{ type: "tool_use", id: "t", name: "a", input, cache_control: mark }] },
+      { role: "user", content: [{ type: "tool_result", tool_use_id: "t", content, cache_control: mark }] },
+    ],
+  };
+  const dataBefore = structuredClone({ schema, input, content });
+  capCacheBreakpoints(payload);
+  assert.deepEqual({ schema, input, content }, dataBefore);
+  assert.equal((payload.messages[0]!.content[0]! as Block).cache_control, undefined);
+  assert.deepEqual(payload.tools[0]!.cache_control, mark);
+  assert.deepEqual(payload.system.map((block) => block.cache_control), [mark, mark]);
+  assert.deepEqual(payload.messages.at(-1)!.content[0]!.cache_control, mark);
+});
+
 test("normal requests with four or fewer markers are byte-unchanged", () => {
   const mark = { type: "ephemeral", ttl: "1h" };
   const payload = {
