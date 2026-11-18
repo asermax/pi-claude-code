@@ -1399,6 +1399,7 @@ class ClaudeProcess {
             failure: this.relay.failure,
             denied: this.relay.denied,
             upstreamError: this.relay.errorText(),
+            upstreamErrorType: this.relay.capture.errorType,
             upstreamFailed: this.relay.upstreamFailed,
           });
         }
@@ -1583,9 +1584,14 @@ export interface IncompleteUpstream {
   failure?: string;
   denied: number;
   upstreamError?: string;
+  /** The `error.type` of an error event inside an otherwise successful stream. */
+  upstreamErrorType?: string;
   /** The upstream request failed before Anthropic sent a response status. */
   upstreamFailed?: boolean;
 }
+
+/** Anthropic error types that stand for a server-side failure (HTTP 500 and 529). */
+const SERVER_STREAM_ERROR_TYPES = new Set(["api_error", "overloaded_error"]);
 
 // Claude Code's native retries are off, so Pi's retry classifier is the only
 // retry left, and it decides from the message text alone. Word transient
@@ -1603,6 +1609,10 @@ export function incompleteUpstreamMessage(input: IncompleteUpstream): string {
     return `Claude Code upstream connection lost before a response (${detail})`;
   }
   if (input.status !== undefined && input.status >= 500) return `Claude Code upstream server error (${detail})`;
+  // The same server-side failure can arrive as an error event inside a 200 stream.
+  if (input.upstreamErrorType !== undefined && SERVER_STREAM_ERROR_TYPES.has(input.upstreamErrorType)) {
+    return `Claude Code upstream server error (${detail})`;
+  }
 
   return `Incomplete Claude Code upstream response (${detail})`;
 }
