@@ -5,7 +5,7 @@ that adds these fixes on top of upstream `main`:
 
 | Problem | Fix source |
 | --- | --- |
-| More than four `cache_control` blocks return 400 after a tool result | jdbrew88 |
+| More than four `cache_control` blocks return 400 after a tool result; a tool argument named `cache_control` is deleted | jdbrew88 |
 | A Pi system-prompt update after the latest query adds a fifth cache breakpoint | ioanlucut |
 | A `ttl=1h` breakpoint placed after Claude Code's 5m one returns 400 | arhen |
 | Nested `null` schema variants dropped, so the model sends the string `"null"` | Stratinator |
@@ -14,6 +14,16 @@ that adds these fixes on top of upstream `main`:
 | A first user message sent as a string aborts the turn | ioanlucut |
 | Claude Code's system reminders reach the model in its system messages | hanselime |
 | Pi retries terminal failures (plan limits, 4xx, usage credits) or skips transient ones | B0und |
+| An `api_error` or `overloaded_error` event inside a 200 stream is not retried | woutervu |
+| An interrupted tool call leaves a `tool_use` without a result, and every later request returns 400 | hanselime |
+| A blank user text block (an image sent without words) fails with `lost a text block` | tonze |
+| Pi's own image scale note after a resized image fails with `lost a text block` | RodrigoHamuy |
+| A failed tool result with an image fails with `lost a text block` | aeries0x |
+| An assistant turn cut off with only thinking makes the user message counts disagree | rickbutton |
+| A tool name over 50 characters fails every request instead of being skipped | Andy123qq4 |
+| Claude Code strips thinking from replayed turns that carry no model, so the model reasons again | mcjentsch, hanselime |
+| Claude Code's per-message effort stays at medium whatever thinking level Pi selects | ariofrio |
+| A repeated date reminder changes the request prefix after tool loops, so the cache misses | sutekimeppou |
 
 The offline model catalog lists Opus 5.5, Fable 5.2, Sonnet 5.5 and Haiku 5.5.
 The test script uses `tsx`, because Node 26 removed
