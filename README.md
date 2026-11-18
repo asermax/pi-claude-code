@@ -15,7 +15,7 @@ that adds these fixes on top of upstream `main`:
 | Claude Code's system reminders reach the model in its system messages | hanselime |
 | Pi retries terminal failures (plan limits, 4xx, usage credits) or skips transient ones | B0und |
 
-The offline model catalog lists Opus 5.5, Fable 5.1, Sonnet 5.5 and Haiku 5.5.
+The offline model catalog lists Opus 5.5, Fable 5.2, Sonnet 5.5 and Haiku 5.5.
 The test script uses `tsx`, because Node 26 removed
 `--experimental-transform-types`.
 

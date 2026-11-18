@@ -51,10 +51,10 @@ const FALLBACK_DISCOVERY: DiscoveredClaudeModel[] = [
     supportsAutoMode: true,
   },
   {
-    value: "claude-fable-5-1[1m]",
-    resolvedModel: "claude-fable-5-1",
+    value: "claude-fable-5-2[1m]",
+    resolvedModel: "claude-fable-5-2",
     displayName: "Fable",
-    description: "Fable 5.1 · Most capable for the hardest and longest-running tasks",
+    description: "Fable 5.2 · Most capable for the hardest and longest-running tasks",
     supportsEffort: true,
     supportedEffortLevels: ["low", "medium", "high", "xhigh", "max"],
     supportsAdaptiveThinking: true,
@@ -86,7 +86,7 @@ const ALIASES: Record<string, string> = {
   sonnet: "claude-sonnet-5-5",
   haiku: "claude-haiku-5-5",
   opus: "claude-opus-5-5",
-  fable: "claude-fable-5-1",
+  fable: "claude-fable-5-2",
 };
 
 function withoutContextSuffix(model: string): string {

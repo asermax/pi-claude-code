@@ -13,7 +13,7 @@ test("fallback catalog matches Claude Code's selectable model families", () => {
     [
       "default",
       "claude-opus-5-5",
-      "claude-fable-5-1",
+      "claude-fable-5-2",
       "claude-sonnet-5-5",
       "claude-haiku-5-5",
     ],
@@ -23,7 +23,7 @@ test("fallback catalog matches Claude Code's selectable model families", () => {
   assert.equal(nativeModel("claude-sonnet-5-5"), "sonnet");
   assert.equal(supportsNativeToolChanges("default"), true);
   assert.equal(supportsNativeToolChanges("claude-opus-5-5"), true);
-  assert.equal(supportsNativeToolChanges("claude-fable-5-1"), true);
+  assert.equal(supportsNativeToolChanges("claude-fable-5-2"), true);
   assert.equal(supportsNativeToolChanges("claude-sonnet-5-5"), true);
 });
 
